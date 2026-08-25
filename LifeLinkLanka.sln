@@ -1,0 +1,55 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{C40BF1E4-FF9E-4122-AAED-B9D8B9C31D0D}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LifeLinkLanka.Domain", "src\LifeLinkLanka.Domain\LifeLinkLanka.Domain.csproj", "{ED77E9B1-0DDD-4112-9639-E38872EF4E3D}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LifeLinkLanka.Application", "src\LifeLinkLanka.Application\LifeLinkLanka.Application.csproj", "{1759FA61-A9A7-4542-B238-FB665E6FAD94}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LifeLinkLanka.Infrastructure", "src\LifeLinkLanka.Infrastructure\LifeLinkLanka.Infrastructure.csproj", "{A833E8E8-061F-4AEF-BB38-6A5B6EF03366}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LifeLinkLanka.API", "src\LifeLinkLanka.API\LifeLinkLanka.API.csproj", "{A898E3A3-E743-4287-8D32-5369C67A3C90}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LifeLinkLanka.Tests", "src\LifeLinkLanka.Tests\LifeLinkLanka.Tests.csproj", "{EE3A3214-1C9C-4E97-BE00-D3EBB84BFD10}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{ED77E9B1-0DDD-4112-9639-E38872EF4E3D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{ED77E9B1-0DDD-4112-9639-E38872EF4E3D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{ED77E9B1-0DDD-4112-9639-E38872EF4E3D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{ED77E9B1-0DDD-4112-9639-E38872EF4E3D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{1759FA61-A9A7-4542-B238-FB665E6FAD94}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{1759FA61-A9A7-4542-B238-FB665E6FAD94}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{1759FA61-A9A7-4542-B238-FB665E6FAD94}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{1759FA61-A9A7-4542-B238-FB665E6FAD94}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A833E8E8-061F-4AEF-BB38-6A5B6EF03366}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A833E8E8-061F-4AEF-BB38-6A5B6EF03366}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A833E8E8-061F-4AEF-BB38-6A5B6EF03366}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A833E8E8-061F-4AEF-BB38-6A5B6EF03366}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A898E3A3-E743-4287-8D32-5369C67A3C90}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A898E3A3-E743-4287-8D32-5369C67A3C90}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A898E3A3-E743-4287-8D32-5369C67A3C90}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A898E3A3-E743-4287-8D32-5369C67A3C90}.Release|Any CPU.Build.0 = Release|Any CPU
+		{EE3A3214-1C9C-4E97-BE00-D3EBB84BFD10}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{EE3A3214-1C9C-4E97-BE00-D3EBB84BFD10}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{EE3A3214-1C9C-4E97-BE00-D3EBB84BFD10}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{EE3A3214-1C9C-4E97-BE00-D3EBB84BFD10}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{ED77E9B1-0DDD-4112-9639-E38872EF4E3D} = {C40BF1E4-FF9E-4122-AAED-B9D8B9C31D0D}
+		{1759FA61-A9A7-4542-B238-FB665E6FAD94} = {C40BF1E4-FF9E-4122-AAED-B9D8B9C31D0D}
+		{A833E8E8-061F-4AEF-BB38-6A5B6EF03366} = {C40BF1E4-FF9E-4122-AAED-B9D8B9C31D0D}
+		{A898E3A3-E743-4287-8D32-5369C67A3C90} = {C40BF1E4-FF9E-4122-AAED-B9D8B9C31D0D}
+		{EE3A3214-1C9C-4E97-BE00-D3EBB84BFD10} = {C40BF1E4-FF9E-4122-AAED-B9D8B9C31D0D}
+	EndGlobalSection
+EndGlobal
