@@ -42,6 +42,9 @@ public class AuthController : ControllerBase
             DateOfBirth = dto.DateOfBirth
         };
 
+        var token = await _userManager.GenerateEmailConfirmationTokenAsync(user);
+        await _emailService.SendEmailConfirmationAsync(user.Email!, user.Id, token);
+
         var result = await _userManager.CreateAsync(user, dto.Password);
         if (!result.Succeeded) return BadRequest(result.Errors);
 
@@ -69,6 +72,9 @@ public class AuthController : ControllerBase
         }
 
         var tokens = await IssueTokensAsync(user);
+
+        await _auditService.LogAsync(user.Id, "USER_LOGIN", ipAddress: HttpContext.Connection.RemoteIpAddress?.ToString());
+        
         return Ok(new LoginResultDto(false, null, tokens));
     }
 
@@ -204,5 +210,17 @@ public class AuthController : ControllerBase
             ValidateLifetime = false
         };
         return new JwtSecurityTokenHandler().ValidateToken(token, validationParams, out _);
+    }
+
+    [HttpGet("confirm-email")]
+    public async Task<IActionResult> ConfirmEmail([FromQuery] Guid userId, [FromQuery] string token)
+    {
+        var user = await _userManager.FindByIdAsync(userId.ToString());
+        if (user is null) return NotFound();
+
+        var result = await _userManager.ConfirmEmailAsync(user, Uri.UnescapeDataString(token));
+        if (!result.Succeeded) return BadRequest(result.Errors);
+
+        return Ok(new { message = "Email confirmed successfully." });
     }
 }

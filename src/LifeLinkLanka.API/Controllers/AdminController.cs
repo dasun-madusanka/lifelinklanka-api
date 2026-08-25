@@ -27,7 +27,7 @@ public class AdminController : ControllerBase
     public async Task<IActionResult> GetUsers([FromQuery] int page = 1, [FromQuery] int pageSize = 20)
     {
         var users = await _db.Users
-            .OrderByDescending(u => u.CreatedAt)
+            .OrderByDescending(u => u.CreatedAtUtc)
             .Skip((page - 1) * pageSize).Take(pageSize)
             .Select(u => new { u.Id, u.FullName, u.Email, u.District, u.AccountStatus, u.IsActive, u.IsMfaEnabled })
             .ToListAsync();
