@@ -5,10 +5,9 @@ using LifeLinkLanka.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using LifeLinkLanka.Application.DTOs.BloodBank;
 
 namespace LifeLinkLanka.API.Controllers;
-
-public record CreateBloodBankDto(string Name, string District, string ContactPhone);
 
 [ApiController]
 [Route("api/v1/blood-banks")]

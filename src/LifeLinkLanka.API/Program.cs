@@ -1,20 +1,24 @@
 using System.Text;
+using FluentValidation;
+using FluentValidation.AspNetCore;
+using Hangfire;
 using LifeLinkLanka.API.Hubs;
 using LifeLinkLanka.API.Middleware;
+using LifeLinkLanka.Application.Interfaces;
+using LifeLinkLanka.Application.Validators;
 using LifeLinkLanka.Domain.Constants;
 using LifeLinkLanka.Domain.Entities;
 using LifeLinkLanka.Infrastructure;
 using LifeLinkLanka.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using Serilog;
-using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Serilog
 Log.Logger = new LoggerConfiguration()
     .ReadFrom.Configuration(builder.Configuration)
     .Enrich.FromLogContext()
@@ -23,10 +27,8 @@ Log.Logger = new LoggerConfiguration()
     .CreateLogger();
 builder.Host.UseSerilog();
 
-// Infrastructure (DbContext, Identity, JWT, MFA, Supabase storage)
 builder.Services.AddInfrastructure(builder.Configuration);
 
-// JWT Authentication
 builder.Services.AddAuthentication(options =>
     {
         options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
@@ -47,7 +49,6 @@ builder.Services.AddAuthentication(options =>
             ClockSkew = TimeSpan.FromSeconds(30)
         };
 
-        // Allow SignalR to receive the JWT via query string
         options.Events = new JwtBearerEvents
         {
             OnMessageReceived = context =>
@@ -68,6 +69,10 @@ builder.Services.AddAuthorization(options =>
 });
 
 builder.Services.AddControllers();
+
+builder.Services.AddFluentValidationAutoValidation();
+builder.Services.AddValidatorsFromAssemblyContaining<RegisterDtoValidator>();
+
 builder.Services.AddSignalR();
 builder.Services.AddEndpointsApiExplorer();
 
@@ -93,13 +98,12 @@ builder.Services.AddSwaggerGen(c =>
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy =>
-        policy.WithOrigins(builder.Configuration["Cors:AllowedOrigin"]!)
+        policy.WithOrigins(builder.Configuration["Cors:AllowedOrigin"] ?? "http://localhost:3000")
               .AllowAnyHeader().AllowAnyMethod().AllowCredentials());
 });
 
 var app = builder.Build();
 
-// Seed roles + default admin on startup
 using (var scope = app.Services.CreateScope())
 {
     var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole<Guid>>>();
@@ -140,7 +144,18 @@ app.UseHttpsRedirection();
 app.UseCors("AllowFrontend");
 app.UseAuthentication();
 app.UseAuthorization();
+
+app.UseHangfireDashboard("/hangfire", new DashboardOptions
+{
+    Authorization = new[] { new LifeLinkLanka.API.HangfireDashboardAuthFilter() }
+});
+
 app.MapControllers();
 app.MapHub<EmergencyHub>("/hubs/emergency");
+
+RecurringJob.AddOrUpdate<IDonorEligibilityJob>(
+    "donor-eligibility-recalculation",
+    job => job.RecalculateAllDonorsAsync(),
+    Cron.Daily);
 
 app.Run();

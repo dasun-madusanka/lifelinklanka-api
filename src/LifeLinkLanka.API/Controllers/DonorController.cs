@@ -5,10 +5,9 @@ using LifeLinkLanka.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using LifeLinkLanka.Application.DTOs.Donor;
 
 namespace LifeLinkLanka.API.Controllers;
-
-public record UpsertDonorProfileDto(BloodType BloodType, double WeightKg, bool ConsentToBeContacted, string? MedicalNotes);
 
 [ApiController]
 [Route("api/v1/donors")]

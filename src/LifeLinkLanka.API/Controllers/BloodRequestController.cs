@@ -7,11 +7,9 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
+using LifeLinkLanka.Application.DTOs.BloodRequest; 
 
 namespace LifeLinkLanka.API.Controllers;
-
-public record CreateBloodRequestDto(Guid HospitalId, BloodType BloodTypeNeeded, int UnitsNeeded,
-    UrgencyLevel Urgency, string PatientContext, DateTime NeededByUtc);
 
 [ApiController]
 [Route("api/v1/blood-requests")]

@@ -5,10 +5,9 @@ using LifeLinkLanka.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using LifeLinkLanka.Application.DTOs.Hospital;
 
 namespace LifeLinkLanka.API.Controllers;
-
-public record CreateHospitalDto(string Name, string RegistrationNumber, string District, string Address, string ContactPhone);
 
 [ApiController]
 [Route("api/v1/hospitals")]

@@ -6,6 +6,7 @@ using LifeLinkLanka.Domain.Entities;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.IdentityModel.Tokens;
+using LifeLinkLanka.Application.Interfaces;
 
 namespace LifeLinkLanka.API.Controllers;
 
@@ -18,15 +19,20 @@ public class AuthController : ControllerBase
     private readonly IJwtService _jwtService;
     private readonly IMfaService _mfaService;
     private readonly IConfiguration _config;
+    private readonly IAuditService _auditService;      
+    private readonly IEmailService _emailService;
 
     public AuthController(UserManager<ApplicationUser> userManager, SignInManager<ApplicationUser> signInManager,
-        IJwtService jwtService, IMfaService mfaService, IConfiguration config)
+        IJwtService jwtService, IMfaService mfaService, IConfiguration config,
+        IAuditService auditService, IEmailService emailService)   
     {
         _userManager = userManager;
         _signInManager = signInManager;
         _jwtService = jwtService;
         _mfaService = mfaService;
         _config = config;
+        _auditService = auditService;
+        _emailService = emailService;
     }
 
     [HttpPost("register")]
@@ -42,18 +48,30 @@ public class AuthController : ControllerBase
             DateOfBirth = dto.DateOfBirth
         };
 
-        var token = await _userManager.GenerateEmailConfirmationTokenAsync(user);
-        await _emailService.SendEmailConfirmationAsync(user.Email!, user.Id, token);
-
         var result = await _userManager.CreateAsync(user, dto.Password);
         if (!result.Succeeded) return BadRequest(result.Errors);
 
-        // Only allow self-registration as Donor; Hospital/BloodBank roles require Admin approval
         await _userManager.AddToRoleAsync(user, LifeLinkLanka.Domain.Constants.Roles.Donor);
 
-        // TODO: send email confirmation link via EmailService
+        var token = await _userManager.GenerateEmailConfirmationTokenAsync(user);
+        await _emailService.SendEmailConfirmationAsync(user.Email!, user.Id, token);
 
-        return Ok(new { message = "Registration successful. Please verify your email." });
+        await _auditService.LogAsync(user.Id, "USER_REGISTERED", $"Role: Donor, District: {dto.District}");
+
+        return Ok(new { message = "Registration successful. Check logs/console for the email confirmation link (dev mode)." });
+    }
+
+    [HttpGet("confirm-email")]
+    public async Task<IActionResult> ConfirmEmail([FromQuery] Guid userId, [FromQuery] string token)
+    {
+        var user = await _userManager.FindByIdAsync(userId.ToString());
+        if (user is null) return NotFound();
+
+        var result = await _userManager.ConfirmEmailAsync(user, Uri.UnescapeDataString(token));
+        if (!result.Succeeded) return BadRequest(result.Errors);
+
+        await _auditService.LogAsync(userId, "EMAIL_CONFIRMED");
+        return Ok(new { message = "Email confirmed successfully." });
     }
 
     [HttpPost("login")]
@@ -63,7 +81,11 @@ public class AuthController : ControllerBase
         if (user is null || !user.IsActive) return Unauthorized("Invalid credentials.");
 
         var check = await _signInManager.CheckPasswordSignInAsync(user, dto.Password, lockoutOnFailure: true);
-        if (!check.Succeeded) return Unauthorized("Invalid credentials.");
+        if (!check.Succeeded)
+        {
+            await _auditService.LogAsync(user.Id, "LOGIN_FAILED", ipAddress: HttpContext.Connection.RemoteIpAddress?.ToString());
+            return Unauthorized("Invalid credentials.");
+        }
 
         if (user.IsMfaEnabled)
         {
@@ -72,9 +94,7 @@ public class AuthController : ControllerBase
         }
 
         var tokens = await IssueTokensAsync(user);
-
         await _auditService.LogAsync(user.Id, "USER_LOGIN", ipAddress: HttpContext.Connection.RemoteIpAddress?.ToString());
-        
         return Ok(new LoginResultDto(false, null, tokens));
     }
 
@@ -89,10 +109,31 @@ public class AuthController : ControllerBase
         if (user is null || string.IsNullOrEmpty(user.MfaSecretKey)) return Unauthorized();
 
         if (!_mfaService.ValidateCode(user.MfaSecretKey, dto.Code))
+        {
+            await _auditService.LogAsync(userId, "MFA_VERIFY_FAILED");
             return Unauthorized("Invalid MFA code.");
+        }
 
         var tokens = await IssueTokensAsync(user);
+        await _auditService.LogAsync(userId, "USER_LOGIN_MFA");
         return Ok(tokens);
+    }
+
+    [HttpPost("mfa/enable")]
+    [Microsoft.AspNetCore.Authorization.Authorize]
+    public async Task<IActionResult> EnableMfa([FromBody] string code)
+    {
+        var user = await _userManager.GetUserAsync(User);
+        if (user is null || string.IsNullOrEmpty(user.MfaSecretKey)) return BadRequest();
+
+        if (!_mfaService.ValidateCode(user.MfaSecretKey, code)) return BadRequest("Invalid code.");
+
+        user.IsMfaEnabled = true;
+        user.MfaEnabledAtUtc = DateTime.UtcNow;
+        await _userManager.UpdateAsync(user);
+
+        await _auditService.LogAsync(user.Id, "MFA_ENABLED");
+        return Ok(new { message = "MFA enabled successfully." });
     }
 
     [HttpPost("mfa/setup")]
@@ -110,21 +151,6 @@ public class AuthController : ControllerBase
         var qrPng = _mfaService.GenerateQrCodePng(qrUri);
 
         return Ok(new MfaSetupResponseDto(secret, Convert.ToBase64String(qrPng)));
-    }
-
-    [HttpPost("mfa/enable")]
-    [Microsoft.AspNetCore.Authorization.Authorize]
-    public async Task<IActionResult> EnableMfa([FromBody] string code)
-    {
-        var user = await _userManager.GetUserAsync(User);
-        if (user is null || string.IsNullOrEmpty(user.MfaSecretKey)) return BadRequest();
-
-        if (!_mfaService.ValidateCode(user.MfaSecretKey, code)) return BadRequest("Invalid code.");
-
-        user.IsMfaEnabled = true;
-        user.MfaEnabledAtUtc = DateTime.UtcNow;
-        await _userManager.UpdateAsync(user);
-        return Ok(new { message = "MFA enabled successfully." });
     }
 
     [HttpPost("refresh")]
@@ -210,17 +236,5 @@ public class AuthController : ControllerBase
             ValidateLifetime = false
         };
         return new JwtSecurityTokenHandler().ValidateToken(token, validationParams, out _);
-    }
-
-    [HttpGet("confirm-email")]
-    public async Task<IActionResult> ConfirmEmail([FromQuery] Guid userId, [FromQuery] string token)
-    {
-        var user = await _userManager.FindByIdAsync(userId.ToString());
-        if (user is null) return NotFound();
-
-        var result = await _userManager.ConfirmEmailAsync(user, Uri.UnescapeDataString(token));
-        if (!result.Succeeded) return BadRequest(result.Errors);
-
-        return Ok(new { message = "Email confirmed successfully." });
     }
 }
