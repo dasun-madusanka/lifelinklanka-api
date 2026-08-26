@@ -2,7 +2,10 @@ using LifeLinkLanka.Application.Interfaces;
 using LifeLinkLanka.Domain.Entities;
 using LifeLinkLanka.Infrastructure.Identity;
 using LifeLinkLanka.Infrastructure.Persistence;
+using LifeLinkLanka.Infrastructure.Services;
 using LifeLinkLanka.Infrastructure.Storage;
+using Hangfire;
+using Hangfire.MySql;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -28,7 +31,7 @@ public static class DependencyInjection
                 options.Lockout.MaxFailedAccessAttempts = 5;
                 options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
                 options.User.RequireUniqueEmail = true;
-                options.SignIn.RequireConfirmedEmail = true;
+                options.SignIn.RequireConfirmedEmail = false; // flip to true once real SMTP is wired
             })
             .AddEntityFrameworkStores<ApplicationDbContext>()
             .AddDefaultTokenProviders();
@@ -36,6 +39,23 @@ public static class DependencyInjection
         services.AddScoped<IJwtService, JwtService>();
         services.AddScoped<IMfaService, MfaService>();
         services.AddScoped<IFileStorageService, SupabaseFileStorageService>();
+        services.AddScoped<IAuditService, AuditService>();
+        services.AddScoped<IEmailService, EmailService>();
+        services.AddScoped<IDonorEligibilityJob, DonorEligibilityJob>();
+
+        services.AddHangfire(hfConfig => hfConfig
+            .SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
+            .UseSimpleAssemblyNameTypeSerializer()
+            .UseRecommendedSerializerSettings()
+            .UseStorage(new MySqlStorage(connStr, new MySqlStorageOptions
+            {
+                TransactionIsolationLevel = System.Transactions.IsolationLevel.ReadCommitted,
+                QueuePollInterval = TimeSpan.FromSeconds(15),
+                JobExpirationCheckInterval = TimeSpan.FromHours(1),
+                PrepareSchemaIfNecessary = true
+            })));
+
+        services.AddHangfireServer();
 
         return services;
     }

@@ -9,6 +9,7 @@ public class ApplicationUser : IdentityUser<Guid>
     public string NicNumber { get; set; } = default!;         // Sri Lankan NIC
     public string District { get; set; } = default!;          // e.g. "Colombo", "Kandy"
     public DateTime DateOfBirth { get; set; }
+    public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
 
     // MFA
     public bool IsMfaEnabled { get; set; } = false;

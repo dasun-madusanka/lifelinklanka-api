@@ -43,6 +43,8 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser, IdentityR
         builder.Entity<DonorProfile>().HasQueryFilter(e => !e.IsDeleted);
         builder.Entity<Hospital>().HasQueryFilter(e => !e.IsDeleted);
         builder.Entity<BloodRequest>().HasQueryFilter(e => !e.IsDeleted);
+        builder.Entity<DonationRecord>().HasQueryFilter(d => !d.DonorProfile.IsDeleted);
+        builder.Entity<DonorMatch>().HasQueryFilter(m => !m.BloodRequest.IsDeleted);
 
         builder.Entity<ApplicationUser>().HasIndex(u => u.NicNumber).IsUnique();
     }

@@ -1,0 +1,866 @@
+{
+  "info": {
+    "name": "LifeLinkLanka API",
+    "description": "National Blood Donation & Emergency Medical Resource Network — complete API collection covering Auth (JWT + TOTP MFA), Hospitals, Donors, Blood Banks, Admin, Blood Requests, and Document Upload (Supabase).\n\nSETUP:\n1. Import this collection AND the accompanying environment file (LifeLinkLanka.postman_environment.json).\n2. Select the 'LifeLinkLanka - Local' environment (top-right dropdown).\n3. Update baseUrl to match the port shown in your `dotnet run` console output.\n\nFULL SMOKE TEST SEQUENCE (run in this exact order for a clean end-to-end pass):\n1. Auth > Register Donor\n2. Auth > Confirm Email (copy userId/token from your dotnet run console log)\n3. Auth > Login (Donor) — no MFA yet, tokens auto-saved to {{accessToken}}\n4. Auth > Login (Admin) — tokens auto-saved to {{adminAccessToken}}\n5. Auth > Setup MFA, then Enable MFA (need a live TOTP code — see https://totp.danhersam.com/)\n6. Auth > Login (Donor) again — now returns requiresMfa:true\n7. Auth > Verify MFA — completes login with a fresh 6-digit code\n8. Hospitals > Register Hospital (uses adminAccessToken) — auto-saves hospitalId\n9. Admin > Get Pending Hospitals, then Admin > Verify / Reject Hospital (approve=true)\n10. Donors > Upsert My Donor Profile (uses accessToken, the donor) — REQUIRED before matching works\n11. Blood Requests > Create Blood Request (bloodTypeNeeded must match the donor's profile, e.g. OPositive) — check your dotnet run console/SignalR client for the CriticalBloodAlert broadcast if urgency=Critical\n12. Donors > Get My Matches — confirm the DonorMatch record appeared\n13. Blood Requests > Respond to Blood Request (as donor)\n14. Blood Banks > Register Blood Bank, then Record a Donation (donorUserId from Admin > Get All Users)\n15. Documents > Upload Document — attach a real PDF/JPG/PNG file manually\n16. Admin > Get Audit Logs — confirm USER_REGISTERED, USER_LOGIN, MFA_ENABLED, USER_LOGIN_MFA entries all appear\n\nTokens and IDs are captured automatically via test scripts as you go — minimal manual copy-pasting required.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_postman_id": "a1b2c3d4-e5f6-4789-a123-lifelinklanka"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      { "key": "token", "value": "{{accessToken}}", "type": "string" }
+    ]
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": { "type": "text/javascript", "exec": [""] }
+    },
+    {
+      "listen": "test",
+      "script": { "type": "text/javascript", "exec": [""] }
+    }
+  ],
+  "variable": [
+    { "key": "baseUrl", "value": "https://localhost:5152", "type": "string" },
+    { "key": "accessToken", "value": "", "type": "string" },
+    { "key": "refreshToken", "value": "", "type": "string" },
+    { "key": "mfaChallengeToken", "value": "", "type": "string" },
+    { "key": "mfaSecretKey", "value": "", "type": "string" },
+    { "key": "donorUserId", "value": "", "type": "string" },
+    { "key": "hospitalId", "value": "", "type": "string" },
+    { "key": "bloodRequestId", "value": "", "type": "string" },
+    { "key": "bloodBankId", "value": "", "type": "string" },
+    { "key": "adminAccessToken", "value": "", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "1. Auth",
+      "item": [
+        {
+          "name": "Register Donor",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fullName\": \"Nimal Perera\",\n  \"email\": \"nimal.perera@example.com\",\n  \"password\": \"Donor@12345!\",\n  \"nicNumber\": \"200012345678\",\n  \"district\": \"Colombo\",\n  \"dateOfBirth\": \"1998-05-14\",\n  \"role\": \"Donor\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/register",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "register"]
+            },
+            "description": "Registers a new Donor account. Note: role field is currently informational only — server always assigns Donor on self-registration. Hospital/BloodBank/Admin roles are assigned by an Admin via the Admin endpoints."
+          },
+          "response": []
+        },
+        {
+          "name": "Login (Donor)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res.requiresMfa) {",
+                  "    pm.environment.set('mfaChallengeToken', res.mfaChallengeToken);",
+                  "    console.log('MFA required — challenge token saved. Proceed to Verify MFA request.');",
+                  "} else if (res.tokens) {",
+                  "    pm.environment.set('accessToken', res.tokens.accessToken);",
+                  "    pm.environment.set('refreshToken', res.tokens.refreshToken);",
+                  "    console.log('Logged in without MFA — tokens saved.');",
+                  "}",
+                  "",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"nimal.perera@example.com\",\n  \"password\": \"Donor@12345!\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "login"]
+            },
+            "description": "Logs in. If MFA is not yet enabled on the account, tokens are returned directly and auto-saved. If MFA is enabled, a short-lived mfaChallengeToken is returned instead — use it in 'Verify MFA'."
+          },
+          "response": []
+        },
+        {
+          "name": "Login (Admin)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res.requiresMfa) {",
+                  "    pm.environment.set('mfaChallengeToken', res.mfaChallengeToken);",
+                  "} else if (res.tokens) {",
+                  "    pm.environment.set('adminAccessToken', res.tokens.accessToken);",
+                  "    console.log('Admin tokens saved.');",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@lifelinklanka.lk\",\n  \"password\": \"Admin@12345!\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "login"]
+            },
+            "description": "Logs in as the seeded default Admin account. Change this password immediately in any non-local environment."
+          },
+          "response": []
+        },
+        {
+          "name": "Confirm Email",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/confirm-email?userId=PASTE_FROM_CONSOLE_LOG&token=PASTE_FROM_CONSOLE_LOG",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "confirm-email"],
+              "query": [
+                { "key": "userId", "value": "PASTE_FROM_CONSOLE_LOG" },
+                { "key": "token", "value": "PASTE_FROM_CONSOLE_LOG" }
+              ]
+            },
+            "description": "Check your `dotnet run` console output for a line like 'EMAIL CONFIRMATION LINK for <email>: https://localhost:5001/api/v1/auth/confirm-email?userId=...&token=...' (this is the EmailService dev stub — no real email is sent). Copy the userId and token query values from that log line into this request's query params, then send. Note: RequireConfirmedEmail is currently set to false in DependencyInjection.cs, so this step is optional for login to succeed — but it's good to verify the flow works end-to-end since you'll want to re-enable it once real SMTP is wired up."
+          },
+          "response": []
+        },
+        {
+          "name": "Setup MFA (get QR + secret)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const res = pm.response.json();",
+                  "pm.environment.set('mfaSecretKey', res.secretKey);",
+                  "console.log('MFA secret saved:', res.secretKey);",
+                  "console.log('Use this secret in an online TOTP generator (e.g. https://totp.danhersam.com/) or Google Authenticator to get a 6-digit code for the Enable MFA request.');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }]
+            },
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/mfa/setup",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "mfa", "setup"]
+            },
+            "description": "Requires a valid access token (login without MFA first). Returns a base32 secret key and a base64 PNG QR code. Scan the QR (decode the base64 to an image, or paste the secret manually) into Google Authenticator / Microsoft Authenticator / Authy."
+          },
+          "response": []
+        },
+        {
+          "name": "Enable MFA (confirm with code)",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }]
+            },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "\"123456\""
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/mfa/enable",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "mfa", "enable"]
+            },
+            "description": "Replace \"123456\" with the current 6-digit TOTP code generated from mfaSecretKey. Once enabled, all future logins for this account require MFA verification."
+          },
+          "response": []
+        },
+        {
+          "name": "Verify MFA (complete login)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res.accessToken) {",
+                  "    pm.environment.set('accessToken', res.accessToken);",
+                  "    pm.environment.set('refreshToken', res.refreshToken);",
+                  "    console.log('MFA verified — tokens saved.');",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"mfaChallengeToken\": \"{{mfaChallengeToken}}\",\n  \"code\": \"123456\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/mfa/verify",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "mfa", "verify"]
+            },
+            "description": "Completes login for an MFA-enabled account. Uses the mfaChallengeToken captured from the Login request, plus a fresh 6-digit TOTP code."
+          },
+          "response": []
+        },
+        {
+          "name": "Refresh Token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res.accessToken) {",
+                  "    pm.environment.set('accessToken', res.accessToken);",
+                  "    pm.environment.set('refreshToken', res.refreshToken);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"accessToken\": \"{{accessToken}}\",\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/refresh",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "refresh"]
+            },
+            "description": "Exchanges an expired access token + valid refresh token for a new token pair. Works even after the access token has expired (as long as it's structurally valid)."
+          },
+          "response": []
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }]
+            },
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/logout",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "logout"]
+            },
+            "description": "Invalidates the stored refresh token server-side. The access token itself remains valid until natural expiry (stateless JWT) — this is expected behavior, not a bug."
+          },
+          "response": []
+        }
+      ],
+      "description": "Registration, login, TOTP-based MFA setup/verification, and token lifecycle management."
+    },
+    {
+      "name": "2. Hospitals",
+      "item": [
+        {
+          "name": "Register Hospital (HospitalStaff/Admin)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res.id) {",
+                  "    pm.environment.set('hospitalId', res.id);",
+                  "    console.log('Hospital created (Pending verification):', res.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{adminAccessToken}}", "type": "string" }]
+            },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Colombo General Hospital\",\n  \"registrationNumber\": \"MOH-CGH-001\",\n  \"district\": \"Colombo\",\n  \"address\": \"Regent Street, Colombo 08\",\n  \"contactPhone\": \"0112691111\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/hospitals",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "hospitals"]
+            },
+            "description": "Requires HospitalStaff or Admin role. Since your only account with a role right now is Admin (donor account has role Donor), this run uses adminAccessToken. In a real flow, an Admin would first assign the HospitalStaff role to a user via '3. Admin > Assign Role to User', then that user would call this endpoint themselves. Created hospital starts in 'Pending' status and won't appear in the public Get All Hospitals list until an Admin verifies it. Auto-saves hospitalId."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Hospital by ID",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{adminAccessToken}}", "type": "string" }]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/hospitals/{{hospitalId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "hospitals", "{{hospitalId}}"]
+            },
+            "description": "Any authenticated user. Returns the hospital regardless of verification status (unlike the list endpoint, which only shows Verified ones)."
+          },
+          "response": []
+        },
+        {
+          "name": "Get All Verified Hospitals",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/hospitals?district=Colombo",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "hospitals"],
+              "query": [{ "key": "district", "value": "Colombo" }]
+            },
+            "description": "Any authenticated user. Only returns hospitals with VerificationStatus = Verified. Run this AFTER '3. Admin > Verify / Reject Hospital' with approve=true, or it will come back empty."
+          },
+          "response": []
+        }
+      ],
+      "description": "Hospital onboarding — created in Pending status, then approved by an Admin (see folder 3) before it can raise blood requests."
+    },
+    {
+      "name": "3. Donors",
+      "item": [
+        {
+          "name": "Upsert My Donor Profile",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }]
+            },
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"bloodType\": \"OPositive\",\n  \"weightKg\": 68,\n  \"consentToBeContacted\": true,\n  \"medicalNotes\": null\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/donors/profile",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "donors", "profile"]
+            },
+            "description": "Requires Donor role. CRITICAL step — a donor is invisible to the blood-matching system until this is called at least once (BloodRequestController only queries the DonorProfiles table, not raw users). Run this with {{accessToken}} (the logged-in donor from folder 1), BEFORE creating a blood request with a matching blood type in folder 4, or no DonorMatch records will be created and no SignalR alert will fire."
+          },
+          "response": []
+        },
+        {
+          "name": "Get My Donor Profile",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/donors/profile",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "donors", "profile"]
+            },
+            "description": "Requires Donor role. Returns 404 with a helpful message if you haven't called Upsert Profile yet."
+          },
+          "response": []
+        },
+        {
+          "name": "Recalculate My Eligibility",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }]
+            },
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/donors/profile/recalculate-eligibility",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "donors", "profile", "recalculate-eligibility"]
+            },
+            "description": "Requires Donor role. Manually triggers the same 120-day cooldown logic that the Hangfire recurring job runs daily. Useful for testing without waiting for the schedule — right after registering, LastDonationDateUtc is null, so this should return IsEligibleToDonate: true immediately."
+          },
+          "response": []
+        },
+        {
+          "name": "Get My Matches",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/donors/my-matches",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "donors", "my-matches"]
+            },
+            "description": "Requires Donor role. Lists every DonorMatch record for the logged-in donor, with the linked BloodRequest and Hospital included. Run this AFTER creating a blood request in folder 4 with a blood type matching this donor's profile — you should see a new match appear here even before you 'respond' to it."
+          },
+          "response": []
+        }
+      ],
+      "description": "Donor profile management — blood type, weight, consent, and eligibility. Must run 'Upsert My Donor Profile' before this donor can ever be matched to a blood request."
+    },
+    {
+      "name": "4. Blood Banks",
+      "item": [
+        {
+          "name": "Register Blood Bank (BloodBank/Admin)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res.id) {",
+                  "    pm.environment.set('bloodBankId', res.id);",
+                  "    console.log('Blood bank created:', res.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{adminAccessToken}}", "type": "string" }]
+            },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"National Blood Transfusion Service - Narahenpita\",\n  \"district\": \"Colombo\",\n  \"contactPhone\": \"0112368701\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/blood-banks",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "blood-banks"]
+            },
+            "description": "Requires BloodBank or Admin role. Starts in Pending status — there's no dedicated Admin verify endpoint for blood banks yet (only hospitals have one in AdminController); this is a known gap worth extending using the same pattern as hospital verification."
+          },
+          "response": []
+        },
+        {
+          "name": "Get All Blood Banks",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/blood-banks?district=Colombo",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "blood-banks"],
+              "query": [{ "key": "district", "value": "Colombo" }]
+            },
+            "description": "Any authenticated user. Only shows Verified blood banks — since there's currently no verify endpoint wired up for blood banks (see note above), this will stay empty until that gap is filled."
+          },
+          "response": []
+        },
+        {
+          "name": "Record a Donation",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{adminAccessToken}}", "type": "string" }]
+            },
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/blood-banks/{{bloodBankId}}/record-donation?donorUserId={{donorUserId}}&volumeMl=450",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "blood-banks", "{{bloodBankId}}", "record-donation"],
+              "query": [
+                { "key": "donorUserId", "value": "{{donorUserId}}" },
+                { "key": "volumeMl", "value": "450" }
+              ]
+            },
+            "description": "Requires BloodBank or Admin role. donorUserId must be the ApplicationUser Id of a donor who already has a DonorProfile (run '3. Donors > Upsert My Donor Profile' first, then get that donor's user id from '5. Admin > Get All Users'). Sets IsEligibleToDonate to false and LastDonationDateUtc to now — verify this by calling '3. Donors > Get My Donor Profile' (as that donor) right after, then try 'Recalculate My Eligibility' to confirm it correctly stays false (since 0 days have passed, not 120)."
+          },
+          "response": []
+        }
+      ],
+      "description": "Blood bank registration and donation recording — updates donor eligibility cooldown timers."
+    },
+    {
+      "name": "5. Admin",
+      "item": [
+        {
+          "name": "Get Dashboard Stats",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{adminAccessToken}}", "type": "string" }]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/dashboard-stats",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "admin", "dashboard-stats"]
+            },
+            "description": "Requires Admin role. Returns total donors, verified hospitals, open requests, and critical request counts."
+          },
+          "response": []
+        },
+        {
+          "name": "Get All Users (paged)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (Array.isArray(res) && res.length > 0) {",
+                  "    const donor = res.find(u => u.email && u.email !== 'admin@lifelinklanka.lk') || res[0];",
+                  "    pm.environment.set('donorUserId', donor.id);",
+                  "    console.log('donorUserId set to:', donor.id, donor.fullName || '');",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{adminAccessToken}}", "type": "string" }]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/users?page=1&pageSize=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "admin", "users"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "pageSize", "value": "20" }
+              ]
+            },
+            "description": "Requires Admin role. Lists all registered users with pagination. Auto-saves the first user's ID into donorUserId for use in other requests."
+          },
+          "response": []
+        },
+        {
+          "name": "Toggle User Active Status",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{adminAccessToken}}", "type": "string" }]
+            },
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/users/{{donorUserId}}/toggle-active",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "admin", "users", "{{donorUserId}}", "toggle-active"]
+            },
+            "description": "Requires Admin role. Activates/deactivates a user account (e.g. to suspend a suspicious donor or staff account)."
+          },
+          "response": []
+        },
+        {
+          "name": "Assign Role to User",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{adminAccessToken}}", "type": "string" }]
+            },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "\"HospitalStaff\""
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/users/{{donorUserId}}/assign-role",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "admin", "users", "{{donorUserId}}", "assign-role"]
+            },
+            "description": "Requires Admin role. Valid values: Admin, BloodBank, HospitalStaff, Donor, EmergencyCoordinator. Replaces all existing roles on the target user with this single role."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Pending Hospitals",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (Array.isArray(res) && res.length > 0) {",
+                  "    pm.environment.set('hospitalId', res[0].id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{adminAccessToken}}", "type": "string" }]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/hospitals/pending",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "admin", "hospitals", "pending"]
+            },
+            "description": "Requires Admin role. Lists hospitals awaiting verification. Auto-saves the first pending hospital's ID."
+          },
+          "response": []
+        },
+        {
+          "name": "Verify / Reject Hospital",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{adminAccessToken}}", "type": "string" }]
+            },
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/hospitals/{{hospitalId}}/verify?approve=true",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "admin", "hospitals", "{{hospitalId}}", "verify"],
+              "query": [{ "key": "approve", "value": "true" }]
+            },
+            "description": "Requires Admin role. Set approve=false to reject instead. A verified hospital can then create blood requests."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Audit Logs",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{adminAccessToken}}", "type": "string" }]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/audit-logs?page=1&pageSize=50",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "admin", "audit-logs"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "pageSize", "value": "50" }
+              ]
+            },
+            "description": "Requires Admin role. Returns system-wide audit trail (logins, MFA changes, request creation, etc.)."
+          },
+          "response": []
+        }
+      ],
+      "description": "Admin-only governance endpoints: user management, role assignment, hospital verification, audit trail, dashboard metrics. All requests here use {{adminAccessToken}} — run '1. Auth > Login (Admin)' first."
+    },
+    {
+      "name": "6. Blood Requests",
+      "item": [
+        {
+          "name": "Create Blood Request (Hospital/Admin)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res.id) {",
+                  "    pm.environment.set('bloodRequestId', res.id);",
+                  "    console.log('Blood request created:', res.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{adminAccessToken}}", "type": "string" }]
+            },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"hospitalId\": \"{{hospitalId}}\",\n  \"bloodTypeNeeded\": \"OPositive\",\n  \"unitsNeeded\": 4,\n  \"urgency\": \"Critical\",\n  \"patientContext\": \"Road traffic accident trauma patient, Colombo General Hospital\",\n  \"neededByUtc\": \"2026-08-27T12:00:00Z\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/blood-requests",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "blood-requests"]
+            },
+            "description": "Requires HospitalStaff or Admin role. Automatically matches eligible, consenting donors of the requested blood type and creates DonorMatch records. If urgency is 'Critical', broadcasts a real-time SignalR alert to all connected donors on the 'Donors' group via /hubs/emergency.\n\nValid bloodTypeNeeded values: APositive, ANegative, BPositive, BNegative, ABPositive, ABNegative, OPositive, ONegative\nValid urgency values: Routine, Urgent, Critical"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Open Blood Requests",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/blood-requests?district=Colombo",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "blood-requests"],
+              "query": [{ "key": "district", "value": "Colombo" }]
+            },
+            "description": "Any authenticated user. Lists all open requests, optionally filtered by hospital district. Ordered by urgency descending. Remove the 'district' query param to see all districts."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Blood Request by ID",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/blood-requests/{{bloodRequestId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "blood-requests", "{{bloodRequestId}}"]
+            },
+            "description": "Any authenticated user. Returns full details of a single blood request including the linked hospital."
+          },
+          "response": []
+        },
+        {
+          "name": "Respond to Blood Request (Donor)",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }]
+            },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "true"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/blood-requests/{{bloodRequestId}}/respond",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "blood-requests", "{{bloodRequestId}}", "respond"]
+            },
+            "description": "Requires Donor role. Body is a raw boolean: true = accept, false = decline. Only works if the logged-in donor was actually matched to this request (matching blood type, eligible, consented)."
+          },
+          "response": []
+        }
+      ],
+      "description": "Emergency blood request lifecycle: hospitals raise requests, matching donors get notified, donors respond."
+    },
+    {
+      "name": "7. Documents (Supabase Upload)",
+      "item": [
+        {
+          "name": "Upload Document",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }]
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "file", "type": "file", "src": [] },
+                { "key": "documentType", "value": "NIC", "type": "text" }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/documents/upload",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "documents", "upload"]
+            },
+            "description": "Any authenticated user. Click the 'file' field's 'Select Files' button in Postman to attach a PDF/JPEG/PNG (max 10MB). Valid documentType values: NIC, MedicalCertificate, HospitalLicense (anything else routes to a generic 'misc-documents' bucket). File is uploaded to Supabase Storage and metadata is saved in MySQL; response includes the public URL."
+          },
+          "response": []
+        }
+      ],
+      "description": "File upload endpoint backed by Supabase Storage — used for NIC verification, medical certificates, and hospital license documents."
+    },
+    {
+      "name": "8. Health Check",
+      "item": [
+        {
+          "name": "Swagger UI (browser only)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/swagger",
+              "host": ["{{baseUrl}}"],
+              "path": ["swagger"]
+            },
+            "description": "Not a real API call to test in Postman — open this URL in your browser to confirm the API is running and explore all endpoints interactively."
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}
