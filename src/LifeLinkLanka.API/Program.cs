@@ -46,7 +46,8 @@ builder.Services.AddAuthentication(options =>
             ValidAudience = builder.Configuration["Jwt:Audience"],
             IssuerSigningKey = new SymmetricSecurityKey(
                 Convert.FromBase64String(builder.Configuration["Jwt:Secret"]!)),
-            ClockSkew = TimeSpan.FromSeconds(30)
+            ClockSkew = TimeSpan.FromSeconds(30),
+            RoleClaimType = "role"   
         };
 
         options.Events = new JwtBearerEvents

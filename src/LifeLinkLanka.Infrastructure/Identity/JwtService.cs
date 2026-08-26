@@ -23,7 +23,7 @@ public class JwtService : IJwtService
             new("mfaEnabled", user.IsMfaEnabled.ToString()),
             new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
         };
-        claims.AddRange(roles.Select(r => new Claim(ClaimTypes.Role, r)));
+        claims.AddRange(roles.Select(r => new Claim("role", r)));
 
         var key = new SymmetricSecurityKey(Convert.FromBase64String(_config["Jwt:Secret"]!));
         var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
