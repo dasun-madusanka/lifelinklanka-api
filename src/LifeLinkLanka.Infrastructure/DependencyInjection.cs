@@ -5,7 +5,7 @@ using LifeLinkLanka.Infrastructure.Persistence;
 using LifeLinkLanka.Infrastructure.Services;
 using LifeLinkLanka.Infrastructure.Storage;
 using Hangfire;
-using Hangfire.MySql;
+using Hangfire.MemoryStorage;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -47,13 +47,7 @@ public static class DependencyInjection
             .SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
             .UseSimpleAssemblyNameTypeSerializer()
             .UseRecommendedSerializerSettings()
-            .UseStorage(new MySqlStorage(connStr, new MySqlStorageOptions
-            {
-                TransactionIsolationLevel = System.Transactions.IsolationLevel.ReadCommitted,
-                QueuePollInterval = TimeSpan.FromSeconds(15),
-                JobExpirationCheckInterval = TimeSpan.FromHours(1),
-                PrepareSchemaIfNecessary = true
-            })));
+            .UseMemoryStorage());
 
         services.AddHangfireServer();
 
