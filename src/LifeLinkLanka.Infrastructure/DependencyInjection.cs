@@ -81,6 +81,12 @@ public static class DependencyInjection
             connStr = ConvertUrlToMySqlConnectionString(connStr);
         }
 
+        if (!string.IsNullOrWhiteSpace(connStr))
+        {
+            // If connection string specifies system schema (sys/mysql/information_schema), rewrite to application database lifelinklanka
+            connStr = System.Text.RegularExpressions.Regex.Replace(connStr, @"(?i)Database\s*=\s*(sys|mysql|information_schema|performance_schema)\b", "Database=lifelinklanka");
+        }
+
         return connStr ?? "Server=localhost;Port=3306;Database=lifelinklanka;User=root;Password=;";
     }
 
@@ -99,6 +105,16 @@ public static class DependencyInjection
                 var host = uri.Host;
                 var port = uri.Port > 0 ? uri.Port : 3306;
                 var database = uri.AbsolutePath.TrimStart('/');
+
+                // If user entered /sys or empty database, redirect to lifelinklanka to prevent permission denial
+                if (string.IsNullOrWhiteSpace(database) || 
+                    database.Equals("sys", StringComparison.OrdinalIgnoreCase) || 
+                    database.Equals("mysql", StringComparison.OrdinalIgnoreCase) || 
+                    database.Equals("information_schema", StringComparison.OrdinalIgnoreCase) || 
+                    database.Equals("performance_schema", StringComparison.OrdinalIgnoreCase))
+                {
+                    database = "lifelinklanka";
+                }
 
                 var sslMode = "Preferred";
                 if (!string.IsNullOrWhiteSpace(uri.Query))
