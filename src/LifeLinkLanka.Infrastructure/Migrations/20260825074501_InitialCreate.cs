@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Migrations;
 
@@ -19,7 +19,7 @@ namespace LifeLinkLanka.Infrastructure.Migrations
                 name: "AspNetRoles",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "char(36)", nullable: false, collation: "ascii_general_ci"),
+                    Id = table.Column<Guid>(type: "char(36)", nullable: false, collation: "ascii_bin"),
                     Name = table.Column<string>(type: "varchar(256)", maxLength: 256, nullable: true)
                         .Annotation("MySql:CharSet", "utf8mb4"),
                     NormalizedName = table.Column<string>(type: "varchar(256)", maxLength: 256, nullable: true)
@@ -37,7 +37,7 @@ namespace LifeLinkLanka.Infrastructure.Migrations
                 name: "AspNetUsers",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "char(36)", nullable: false, collation: "ascii_general_ci"),
+                    Id = table.Column<Guid>(type: "char(36)", nullable: false, collation: "ascii_bin"),
                     FullName = table.Column<string>(type: "longtext", nullable: false)
                         .Annotation("MySql:CharSet", "utf8mb4"),
                     NicNumber = table.Column<string>(type: "varchar(255)", nullable: false)
@@ -88,8 +88,8 @@ namespace LifeLinkLanka.Infrastructure.Migrations
                 name: "AuditLogs",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "char(36)", nullable: false, collation: "ascii_general_ci"),
-                    ActorUserId = table.Column<Guid>(type: "char(36)", nullable: true, collation: "ascii_general_ci"),
+                    Id = table.Column<Guid>(type: "char(36)", nullable: false, collation: "ascii_bin"),
+                    ActorUserId = table.Column<Guid>(type: "char(36)", nullable: true, collation: "ascii_bin"),
                     Action = table.Column<string>(type: "longtext", nullable: false)
                         .Annotation("MySql:CharSet", "utf8mb4"),
                     Details = table.Column<string>(type: "longtext", nullable: true)
@@ -110,7 +110,7 @@ namespace LifeLinkLanka.Infrastructure.Migrations
                 name: "BloodBanks",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "char(36)", nullable: false, collation: "ascii_general_ci"),
+                    Id = table.Column<Guid>(type: "char(36)", nullable: false, collation: "ascii_bin"),
                     Name = table.Column<string>(type: "longtext", nullable: false)
                         .Annotation("MySql:CharSet", "utf8mb4"),
                     District = table.Column<string>(type: "longtext", nullable: false)
@@ -132,7 +132,7 @@ namespace LifeLinkLanka.Infrastructure.Migrations
                 name: "Hospitals",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "char(36)", nullable: false, collation: "ascii_general_ci"),
+                    Id = table.Column<Guid>(type: "char(36)", nullable: false, collation: "ascii_bin"),
                     Name = table.Column<string>(type: "longtext", nullable: false)
                         .Annotation("MySql:CharSet", "utf8mb4"),
                     RegistrationNumber = table.Column<string>(type: "longtext", nullable: false)
@@ -144,7 +144,7 @@ namespace LifeLinkLanka.Infrastructure.Migrations
                     ContactPhone = table.Column<string>(type: "longtext", nullable: false)
                         .Annotation("MySql:CharSet", "utf8mb4"),
                     VerificationStatus = table.Column<int>(type: "int", nullable: false),
-                    CreatedByUserId = table.Column<Guid>(type: "char(36)", nullable: false, collation: "ascii_general_ci"),
+                    CreatedByUserId = table.Column<Guid>(type: "char(36)", nullable: false, collation: "ascii_bin"),
                     CreatedAtUtc = table.Column<DateTime>(type: "datetime(6)", nullable: false),
                     UpdatedAtUtc = table.Column<DateTime>(type: "datetime(6)", nullable: true),
                     IsDeleted = table.Column<bool>(type: "tinyint(1)", nullable: false)
@@ -159,8 +159,8 @@ namespace LifeLinkLanka.Infrastructure.Migrations
                 name: "UploadedDocuments",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "char(36)", nullable: false, collation: "ascii_general_ci"),
-                    OwnerUserId = table.Column<Guid>(type: "char(36)", nullable: false, collation: "ascii_general_ci"),
+                    Id = table.Column<Guid>(type: "char(36)", nullable: false, collation: "ascii_bin"),
+                    OwnerUserId = table.Column<Guid>(type: "char(36)", nullable: false, collation: "ascii_bin"),
                     DocumentType = table.Column<string>(type: "longtext", nullable: false)
                         .Annotation("MySql:CharSet", "utf8mb4"),
                     SupabaseBucket = table.Column<string>(type: "longtext", nullable: false)
@@ -188,7 +188,7 @@ namespace LifeLinkLanka.Infrastructure.Migrations
                 {
                     Id = table.Column<int>(type: "int", nullable: false)
                         .Annotation("MySql:ValueGenerationStrategy", MySqlValueGenerationStrategy.IdentityColumn),
-                    RoleId = table.Column<Guid>(type: "char(36)", nullable: false, collation: "ascii_general_ci"),
+                    RoleId = table.Column<Guid>(type: "char(36)", nullable: false, collation: "ascii_bin"),
                     ClaimType = table.Column<string>(type: "longtext", nullable: true)
                         .Annotation("MySql:CharSet", "utf8mb4"),
                     ClaimValue = table.Column<string>(type: "longtext", nullable: true)
@@ -212,7 +212,7 @@ namespace LifeLinkLanka.Infrastructure.Migrations
                 {
                     Id = table.Column<int>(type: "int", nullable: false)
                         .Annotation("MySql:ValueGenerationStrategy", MySqlValueGenerationStrategy.IdentityColumn),
-                    UserId = table.Column<Guid>(type: "char(36)", nullable: false, collation: "ascii_general_ci"),
+                    UserId = table.Column<Guid>(type: "char(36)", nullable: false, collation: "ascii_bin"),
                     ClaimType = table.Column<string>(type: "longtext", nullable: true)
                         .Annotation("MySql:CharSet", "utf8mb4"),
                     ClaimValue = table.Column<string>(type: "longtext", nullable: true)
@@ -240,7 +240,7 @@ namespace LifeLinkLanka.Infrastructure.Migrations
                         .Annotation("MySql:CharSet", "utf8mb4"),
                     ProviderDisplayName = table.Column<string>(type: "longtext", nullable: true)
                         .Annotation("MySql:CharSet", "utf8mb4"),
-                    UserId = table.Column<Guid>(type: "char(36)", nullable: false, collation: "ascii_general_ci")
+                    UserId = table.Column<Guid>(type: "char(36)", nullable: false, collation: "ascii_bin")
                 },
                 constraints: table =>
                 {
@@ -258,8 +258,8 @@ namespace LifeLinkLanka.Infrastructure.Migrations
                 name: "AspNetUserRoles",
                 columns: table => new
                 {
-                    UserId = table.Column<Guid>(type: "char(36)", nullable: false, collation: "ascii_general_ci"),
-                    RoleId = table.Column<Guid>(type: "char(36)", nullable: false, collation: "ascii_general_ci")
+                    UserId = table.Column<Guid>(type: "char(36)", nullable: false, collation: "ascii_bin"),
+                    RoleId = table.Column<Guid>(type: "char(36)", nullable: false, collation: "ascii_bin")
                 },
                 constraints: table =>
                 {
@@ -283,7 +283,7 @@ namespace LifeLinkLanka.Infrastructure.Migrations
                 name: "AspNetUserTokens",
                 columns: table => new
                 {
-                    UserId = table.Column<Guid>(type: "char(36)", nullable: false, collation: "ascii_general_ci"),
+                    UserId = table.Column<Guid>(type: "char(36)", nullable: false, collation: "ascii_bin"),
                     LoginProvider = table.Column<string>(type: "varchar(255)", nullable: false)
                         .Annotation("MySql:CharSet", "utf8mb4"),
                     Name = table.Column<string>(type: "varchar(255)", nullable: false)
@@ -307,8 +307,8 @@ namespace LifeLinkLanka.Infrastructure.Migrations
                 name: "DonorProfiles",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "char(36)", nullable: false, collation: "ascii_general_ci"),
-                    UserId = table.Column<Guid>(type: "char(36)", nullable: false, collation: "ascii_general_ci"),
+                    Id = table.Column<Guid>(type: "char(36)", nullable: false, collation: "ascii_bin"),
+                    UserId = table.Column<Guid>(type: "char(36)", nullable: false, collation: "ascii_bin"),
                     BloodType = table.Column<int>(type: "int", nullable: false),
                     WeightKg = table.Column<double>(type: "double", nullable: false),
                     LastDonationDateUtc = table.Column<DateTime>(type: "datetime(6)", nullable: true),
@@ -336,8 +336,8 @@ namespace LifeLinkLanka.Infrastructure.Migrations
                 name: "BloodRequests",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "char(36)", nullable: false, collation: "ascii_general_ci"),
-                    HospitalId = table.Column<Guid>(type: "char(36)", nullable: false, collation: "ascii_general_ci"),
+                    Id = table.Column<Guid>(type: "char(36)", nullable: false, collation: "ascii_bin"),
+                    HospitalId = table.Column<Guid>(type: "char(36)", nullable: false, collation: "ascii_bin"),
                     BloodTypeNeeded = table.Column<int>(type: "int", nullable: false),
                     UnitsNeeded = table.Column<int>(type: "int", nullable: false),
                     UnitsFulfilled = table.Column<int>(type: "int", nullable: false),
@@ -366,9 +366,9 @@ namespace LifeLinkLanka.Infrastructure.Migrations
                 name: "DonationRecords",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "char(36)", nullable: false, collation: "ascii_general_ci"),
-                    DonorProfileId = table.Column<Guid>(type: "char(36)", nullable: false, collation: "ascii_general_ci"),
-                    BloodBankId = table.Column<Guid>(type: "char(36)", nullable: true, collation: "ascii_general_ci"),
+                    Id = table.Column<Guid>(type: "char(36)", nullable: false, collation: "ascii_bin"),
+                    DonorProfileId = table.Column<Guid>(type: "char(36)", nullable: false, collation: "ascii_bin"),
+                    BloodBankId = table.Column<Guid>(type: "char(36)", nullable: true, collation: "ascii_bin"),
                     DonationDateUtc = table.Column<DateTime>(type: "datetime(6)", nullable: false),
                     VolumeMl = table.Column<double>(type: "double", nullable: false),
                     CreatedAtUtc = table.Column<DateTime>(type: "datetime(6)", nullable: false),
@@ -391,9 +391,9 @@ namespace LifeLinkLanka.Infrastructure.Migrations
                 name: "DonorMatches",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "char(36)", nullable: false, collation: "ascii_general_ci"),
-                    BloodRequestId = table.Column<Guid>(type: "char(36)", nullable: false, collation: "ascii_general_ci"),
-                    DonorUserId = table.Column<Guid>(type: "char(36)", nullable: false, collation: "ascii_general_ci"),
+                    Id = table.Column<Guid>(type: "char(36)", nullable: false, collation: "ascii_bin"),
+                    BloodRequestId = table.Column<Guid>(type: "char(36)", nullable: false, collation: "ascii_bin"),
+                    DonorUserId = table.Column<Guid>(type: "char(36)", nullable: false, collation: "ascii_bin"),
                     NotifiedViaRealtime = table.Column<bool>(type: "tinyint(1)", nullable: false),
                     DonorResponded = table.Column<bool>(type: "tinyint(1)", nullable: false),
                     DonorAccepted = table.Column<bool>(type: "tinyint(1)", nullable: false),

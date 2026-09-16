@@ -26,6 +26,8 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser, IdentityR
     {
         base.OnModelCreating(builder);
 
+        builder.UseGuidCollation("ascii_bin");
+
         builder.Entity<DonorProfile>()
             .HasOne(d => d.User)
             .WithOne(u => u.DonorProfile)

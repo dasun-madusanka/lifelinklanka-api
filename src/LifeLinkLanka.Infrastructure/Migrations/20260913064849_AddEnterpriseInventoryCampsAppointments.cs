@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
@@ -50,7 +50,7 @@ namespace LifeLinkLanka.Infrastructure.Migrations
                 name: "BloodCamps",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "char(36)", nullable: false, collation: "ascii_general_ci"),
+                    Id = table.Column<Guid>(type: "char(36)", nullable: false, collation: "ascii_bin"),
                     Title = table.Column<string>(type: "longtext", nullable: false)
                         .Annotation("MySql:CharSet", "utf8mb4"),
                     OrganizerName = table.Column<string>(type: "longtext", nullable: false)
@@ -84,8 +84,8 @@ namespace LifeLinkLanka.Infrastructure.Migrations
                 name: "BloodInventories",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "char(36)", nullable: false, collation: "ascii_general_ci"),
-                    BloodBankId = table.Column<Guid>(type: "char(36)", nullable: false, collation: "ascii_general_ci"),
+                    Id = table.Column<Guid>(type: "char(36)", nullable: false, collation: "ascii_bin"),
+                    BloodBankId = table.Column<Guid>(type: "char(36)", nullable: false, collation: "ascii_bin"),
                     BloodType = table.Column<int>(type: "int", nullable: false),
                     ComponentType = table.Column<int>(type: "int", nullable: false),
                     UnitsAvailable = table.Column<int>(type: "int", nullable: false),
@@ -116,9 +116,9 @@ namespace LifeLinkLanka.Infrastructure.Migrations
                 name: "CampRegistrations",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "char(36)", nullable: false, collation: "ascii_general_ci"),
-                    BloodCampId = table.Column<Guid>(type: "char(36)", nullable: false, collation: "ascii_general_ci"),
-                    UserId = table.Column<Guid>(type: "char(36)", nullable: true, collation: "ascii_general_ci"),
+                    Id = table.Column<Guid>(type: "char(36)", nullable: false, collation: "ascii_bin"),
+                    BloodCampId = table.Column<Guid>(type: "char(36)", nullable: false, collation: "ascii_bin"),
+                    UserId = table.Column<Guid>(type: "char(36)", nullable: true, collation: "ascii_bin"),
                     DonorName = table.Column<string>(type: "longtext", nullable: false)
                         .Annotation("MySql:CharSet", "utf8mb4"),
                     ContactPhone = table.Column<string>(type: "longtext", nullable: false)
@@ -151,10 +151,10 @@ namespace LifeLinkLanka.Infrastructure.Migrations
                 name: "DonationAppointments",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "char(36)", nullable: false, collation: "ascii_general_ci"),
-                    DonorUserId = table.Column<Guid>(type: "char(36)", nullable: false, collation: "ascii_general_ci"),
-                    BloodBankId = table.Column<Guid>(type: "char(36)", nullable: true, collation: "ascii_general_ci"),
-                    BloodCampId = table.Column<Guid>(type: "char(36)", nullable: true, collation: "ascii_general_ci"),
+                    Id = table.Column<Guid>(type: "char(36)", nullable: false, collation: "ascii_bin"),
+                    DonorUserId = table.Column<Guid>(type: "char(36)", nullable: false, collation: "ascii_bin"),
+                    BloodBankId = table.Column<Guid>(type: "char(36)", nullable: true, collation: "ascii_bin"),
+                    BloodCampId = table.Column<Guid>(type: "char(36)", nullable: true, collation: "ascii_bin"),
                     ScheduledSlotUtc = table.Column<DateTime>(type: "datetime(6)", nullable: false),
                     Status = table.Column<int>(type: "int", nullable: false),
                     PreScreeningPassed = table.Column<bool>(type: "tinyint(1)", nullable: false),
