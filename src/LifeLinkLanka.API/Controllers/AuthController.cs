@@ -6,7 +6,12 @@ using LifeLinkLanka.Domain.Entities;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.IdentityModel.Tokens;
-using LifeLinkLanka.Application.Interfaces;
+
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.EntityFrameworkCore;
+using LifeLinkLanka.Domain.Constants;
+using LifeLinkLanka.Domain.Enums;
+using LifeLinkLanka.Infrastructure.Persistence;
 
 namespace LifeLinkLanka.API.Controllers;
 
@@ -21,10 +26,11 @@ public class AuthController : ControllerBase
     private readonly IConfiguration _config;
     private readonly IAuditService _auditService;      
     private readonly IEmailService _emailService;
+    private readonly ApplicationDbContext _db;
 
     public AuthController(UserManager<ApplicationUser> userManager, SignInManager<ApplicationUser> signInManager,
         IJwtService jwtService, IMfaService mfaService, IConfiguration config,
-        IAuditService auditService, IEmailService emailService)   
+        IAuditService auditService, IEmailService emailService, ApplicationDbContext db)   
     {
         _userManager = userManager;
         _signInManager = signInManager;
@@ -33,11 +39,61 @@ public class AuthController : ControllerBase
         _config = config;
         _auditService = auditService;
         _emailService = emailService;
+        _db = db;
+    }
+
+    [HttpPost("upload-verification-doc")]
+    [AllowAnonymous]
+    [RequestSizeLimit(10_000_000)] // 10 MB
+    public async Task<IActionResult> UploadVerificationDoc([FromForm] IFormFile file, [FromForm] string? documentType)
+    {
+        if (file == null || file.Length == 0)
+            return BadRequest(new { message = "No file provided or file is empty." });
+
+        var allowedExtensions = new[] { ".pdf", ".jpg", ".jpeg", ".png" };
+        var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
+        if (!allowedExtensions.Contains(ext))
+            return BadRequest(new { message = "Unsupported file format. Please upload a valid PDF, JPG, or PNG document." });
+
+        var webRoot = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
+        var uploadsDir = Path.Combine(webRoot, "uploads");
+        if (!Directory.Exists(uploadsDir)) Directory.CreateDirectory(uploadsDir);
+
+        var uniqueFileName = $"{Guid.NewGuid():N}_{Path.GetFileName(file.FileName)}";
+        var localFilePath = Path.Combine(uploadsDir, uniqueFileName);
+
+        await using (var stream = new FileStream(localFilePath, FileMode.Create))
+        {
+            await file.CopyToAsync(stream);
+        }
+
+        var documentUrl = $"/uploads/{uniqueFileName}";
+
+        return Ok(new
+        {
+            documentUrl,
+            fileName = file.FileName,
+            sizeBytes = file.Length,
+            documentType = documentType ?? "VerificationDocument"
+        });
     }
 
     [HttpPost("register")]
     public async Task<IActionResult> Register(RegisterDto dto)
     {
+        var targetRole = dto.Role switch
+        {
+            "HospitalStaff" or "hospitalstaff" => Roles.HospitalStaff,
+            "BloodBank" or "bloodbank" => Roles.BloodBank,
+            "Donor" or "donor" => Roles.Donor,
+            _ => Roles.Donor
+        };
+
+        if (dto.Role != null && dto.Role.Equals("Admin", StringComparison.OrdinalIgnoreCase))
+        {
+            return BadRequest("Self-registration as System Administrator is not permitted.");
+        }
+
         var user = new ApplicationUser
         {
             UserName = dto.Email,
@@ -45,20 +101,83 @@ public class AuthController : ControllerBase
             FullName = dto.FullName,
             NicNumber = dto.NicNumber,
             District = dto.District,
-            DateOfBirth = dto.DateOfBirth
+            DateOfBirth = dto.DateOfBirth,
+            PhoneNumber = dto.PhoneNumber,
+            EmailConfirmed = true,
+            IsActive = true,
+            AccountStatus = VerificationStatus.Pending,
+            VerificationDocumentUrl = dto.VerificationDocumentUrl,
+            VerificationDocumentName = dto.VerificationDocumentName,
+            VerificationDocumentType = dto.VerificationDocumentType ?? (targetRole == Roles.Donor ? "MedicalCertificate" : (targetRole == Roles.HospitalStaff ? "HospitalLicense" : "BloodBankLicense"))
         };
 
         var result = await _userManager.CreateAsync(user, dto.Password);
         if (!result.Succeeded) return BadRequest(result.Errors);
 
-        await _userManager.AddToRoleAsync(user, LifeLinkLanka.Domain.Constants.Roles.Donor);
+        await _userManager.AddToRoleAsync(user, targetRole);
 
-        var token = await _userManager.GenerateEmailConfirmationTokenAsync(user);
-        await _emailService.SendEmailConfirmationAsync(user.Email!, user.Id, token);
+        if (targetRole == Roles.Donor)
+        {
+            var bloodType = Enum.TryParse<BloodType>(dto.BloodType, true, out var bt) ? bt : BloodType.OPositive;
+            var profile = new DonorProfile
+            {
+                UserId = user.Id,
+                BloodType = bloodType,
+                WeightKg = dto.WeightKg ?? 60,
+                IsEligibleToDonate = true,
+                ConsentToBeContacted = true,
+                DonorCardNumber = $"LLL-DONOR-{Random.Shared.Next(100000, 999999)}"
+            };
+            _db.DonorProfiles.Add(profile);
+        }
+        else if (targetRole == Roles.HospitalStaff && !string.IsNullOrWhiteSpace(dto.HospitalName))
+        {
+            var hospital = new Hospital
+            {
+                Name = dto.HospitalName,
+                RegistrationNumber = !string.IsNullOrWhiteSpace(dto.HospitalRegistrationNumber) 
+                    ? dto.HospitalRegistrationNumber 
+                    : $"HOSP-{dto.District.ToUpperInvariant()[..Math.Min(3, dto.District.Length)]}-{Random.Shared.Next(100, 999)}",
+                District = !string.IsNullOrWhiteSpace(dto.HospitalDistrict) ? dto.HospitalDistrict : dto.District,
+                Address = !string.IsNullOrWhiteSpace(dto.HospitalAddress) ? dto.HospitalAddress : $"{dto.HospitalName}, {dto.District}",
+                ContactPhone = dto.HospitalContactPhone ?? dto.PhoneNumber ?? "0112691111",
+                CreatedByUserId = user.Id,
+                VerificationStatus = VerificationStatus.Pending
+            };
+            _db.Hospitals.Add(hospital);
+        }
+        else if (targetRole == Roles.BloodBank && !string.IsNullOrWhiteSpace(dto.BloodBankName))
+        {
+            var bank = new BloodBank
+            {
+                Name = dto.BloodBankName,
+                District = !string.IsNullOrWhiteSpace(dto.BloodBankDistrict) ? dto.BloodBankDistrict : dto.District,
+                ContactPhone = dto.BloodBankContactPhone ?? dto.PhoneNumber ?? "0112691111",
+                VerificationStatus = VerificationStatus.Pending
+            };
+            _db.BloodBanks.Add(bank);
+        }
 
-        await _auditService.LogAsync(user.Id, "USER_REGISTERED", $"Role: Donor, District: {dto.District}");
+        if (!string.IsNullOrWhiteSpace(dto.VerificationDocumentUrl))
+        {
+            var doc = new UploadedDocument
+            {
+                OwnerUserId = user.Id,
+                DocumentType = user.VerificationDocumentType ?? "VerificationDocument",
+                SupabaseBucket = "verification-documents",
+                StoragePath = dto.VerificationDocumentUrl,
+                PublicUrl = dto.VerificationDocumentUrl,
+                FileName = dto.VerificationDocumentName ?? "verification_doc",
+                SizeBytes = 0
+            };
+            _db.UploadedDocuments.Add(doc);
+        }
 
-        return Ok(new { message = "Registration successful. Check logs/console for the email confirmation link (dev mode)." });
+        await _db.SaveChangesAsync();
+
+        await _auditService.LogAsync(user.Id, "USER_REGISTERED_PENDING_APPROVAL", $"Role: {targetRole}, District: {dto.District}, Doc: {user.VerificationDocumentName}");
+
+        return Ok(new { message = $"Registration submitted successfully as {targetRole}! Your account credentials and uploaded verification documents are now pending administrative review. You will be able to log in once approved by the System Administrator." });
     }
 
     [HttpGet("confirm-email")]
@@ -87,6 +206,26 @@ public class AuthController : ControllerBase
             return Unauthorized("Invalid credentials.");
         }
 
+        // Check Administrative Verification Gating
+        if (user.AccountStatus == VerificationStatus.Pending)
+        {
+            await _auditService.LogAsync(user.Id, "LOGIN_BLOCKED_PENDING_APPROVAL", ipAddress: HttpContext.Connection.RemoteIpAddress?.ToString());
+            return StatusCode(403, new
+            {
+                message = "Account Pending Administrator Verification: Your account details and uploaded verification documents are currently under review by the Administrator. Access will be unlocked once approved."
+            });
+        }
+
+        if (user.AccountStatus == VerificationStatus.Rejected)
+        {
+            await _auditService.LogAsync(user.Id, "LOGIN_BLOCKED_REJECTED", ipAddress: HttpContext.Connection.RemoteIpAddress?.ToString());
+            var reason = string.IsNullOrWhiteSpace(user.RejectionReason) ? "" : $" Reason: {user.RejectionReason}";
+            return StatusCode(403, new
+            {
+                message = $"Account Registration Rejected: Your account application was not approved by the administrator.{reason}"
+            });
+        }
+
         if (user.IsMfaEnabled)
         {
             var challengeToken = GenerateMfaChallengeToken(user.Id);
@@ -97,6 +236,96 @@ public class AuthController : ControllerBase
         await _auditService.LogAsync(user.Id, "USER_LOGIN", ipAddress: HttpContext.Connection.RemoteIpAddress?.ToString());
         return Ok(new LoginResultDto(false, null, tokens));
     }
+
+
+    [HttpGet("me")]
+    [Authorize]
+    public async Task<IActionResult> GetCurrentUser()
+    {
+        var subClaim = User.FindFirstValue("sub") ?? User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrEmpty(subClaim) || !Guid.TryParse(subClaim, out var userId))
+            return Unauthorized();
+
+        var user = await _userManager.Users
+            .Include(u => u.DonorProfile)
+            .FirstOrDefaultAsync(u => u.Id == userId);
+
+        if (user is null) return NotFound("User not found.");
+
+        var roles = await _userManager.GetRolesAsync(user);
+
+        object? facility = null;
+        if (roles.Contains(Roles.HospitalStaff) || roles.Contains(Roles.Admin))
+        {
+            var hospital = await _db.Hospitals.FirstOrDefaultAsync(h => h.CreatedByUserId == user.Id && h.District == user.District && h.Name.Contains("NHSL"))
+                        ?? await _db.Hospitals.FirstOrDefaultAsync(h => h.CreatedByUserId == user.Id && h.District == user.District)
+                        ?? await _db.Hospitals.FirstOrDefaultAsync(h => h.CreatedByUserId == user.Id)
+                        ?? await _db.Hospitals.FirstOrDefaultAsync(h => h.District == user.District && h.VerificationStatus == VerificationStatus.Verified)
+                        ?? await _db.Hospitals.FirstOrDefaultAsync(h => h.VerificationStatus == VerificationStatus.Verified);
+            if (hospital != null)
+            {
+                facility = new
+                {
+                    Type = "Hospital",
+                    hospital.Id,
+                    hospital.Name,
+                    hospital.District,
+                    hospital.Address,
+                    hospital.ContactPhone,
+                    hospital.RegistrationNumber
+                };
+            }
+        }
+        else if (roles.Contains(Roles.BloodBank))
+        {
+            var bank = await _db.BloodBanks.FirstOrDefaultAsync(b => b.District == user.District && b.VerificationStatus == VerificationStatus.Verified)
+                    ?? await _db.BloodBanks.FirstOrDefaultAsync(b => b.VerificationStatus == VerificationStatus.Verified);
+            if (bank != null)
+            {
+                facility = new
+                {
+                    Type = "BloodBank",
+                    bank.Id,
+                    bank.Name,
+                    bank.District,
+                    bank.ContactPhone
+                };
+            }
+        }
+
+        object? donorProfile = null;
+        if (user.DonorProfile != null)
+        {
+            donorProfile = new
+            {
+                user.DonorProfile.BloodType,
+                user.DonorProfile.WeightKg,
+                user.DonorProfile.IsEligibleToDonate,
+                user.DonorProfile.LastDonationDateUtc,
+                user.DonorProfile.DonationsCompletedCount,
+                TotalVolumeDonatedMl = user.DonorProfile.TotalVolumeMl,
+                user.DonorProfile.DonorCardNumber,
+                user.DonorProfile.ConsentToBeContacted
+            };
+        }
+
+        return Ok(new
+        {
+            user.Id,
+            user.Email,
+            user.FullName,
+            user.District,
+            user.NicNumber,
+            user.DateOfBirth,
+            user.PhoneNumber,
+            user.IsMfaEnabled,
+            AccountStatus = user.AccountStatus.ToString(),
+            Roles = roles,
+            AffiliatedFacility = facility,
+            DonorProfile = donorProfile
+        });
+    }
+
 
     [HttpPost("mfa/verify")]
     public async Task<ActionResult<TokenResponseDto>> VerifyMfa(MfaVerifyDto dto)

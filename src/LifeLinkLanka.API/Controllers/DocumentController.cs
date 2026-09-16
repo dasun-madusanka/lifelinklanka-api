@@ -3,6 +3,7 @@ using LifeLinkLanka.Domain.Entities;
 using LifeLinkLanka.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using LifeLinkLanka.API.Extensions;
 
 namespace LifeLinkLanka.API.Controllers;
 
@@ -29,7 +30,7 @@ public class DocumentController : ControllerBase
         var allowedTypes = new[] { "application/pdf", "image/jpeg", "image/png" };
         if (!allowedTypes.Contains(file.ContentType)) return BadRequest("Unsupported file type.");
 
-        var userId = Guid.Parse(User.FindFirst("sub")!.Value);
+        var userId = User.GetUserId();
         var bucket = documentType switch
         {
             "NIC" => "identity-documents",

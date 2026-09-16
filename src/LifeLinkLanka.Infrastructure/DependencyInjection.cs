@@ -42,6 +42,7 @@ public static class DependencyInjection
         services.AddScoped<IAuditService, AuditService>();
         services.AddScoped<IEmailService, EmailService>();
         services.AddScoped<IDonorEligibilityJob, DonorEligibilityJob>();
+        services.AddScoped<IBloodMatchingService, BloodMatchingService>();
 
         services.AddHangfire(hfConfig => hfConfig
             .SetDataCompatibilityLevel(CompatibilityLevel.Version_180)

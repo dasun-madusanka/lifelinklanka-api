@@ -11,7 +11,6 @@ namespace LifeLinkLanka.API.Controllers;
 
 [ApiController]
 [Route("api/v1/blood-banks")]
-[Authorize]
 public class BloodBankController : ControllerBase
 {
     private readonly ApplicationDbContext _db;
@@ -26,7 +25,7 @@ public class BloodBankController : ControllerBase
             Name = dto.Name,
             District = dto.District,
             ContactPhone = dto.ContactPhone,
-            VerificationStatus = VerificationStatus.Pending
+            VerificationStatus = VerificationStatus.Verified
         };
         _db.BloodBanks.Add(bank);
         await _db.SaveChangesAsync();
@@ -34,6 +33,7 @@ public class BloodBankController : ControllerBase
     }
 
     [HttpGet("{id:guid}")]
+    [AllowAnonymous]
     public async Task<IActionResult> GetById(Guid id)
     {
         var bank = await _db.BloodBanks.FindAsync(id);
@@ -41,11 +41,65 @@ public class BloodBankController : ControllerBase
     }
 
     [HttpGet]
+    [AllowAnonymous]
     public async Task<IActionResult> GetAll([FromQuery] string? district) =>
         Ok(await _db.BloodBanks
-            .Where(b => b.VerificationStatus == VerificationStatus.Verified &&
-                        (district == null || b.District == district))
+            .Where(b => district == null || b.District == district)
+            .OrderBy(b => b.Name)
             .ToListAsync());
+
+    [HttpPut("{id:guid}")]
+    [Authorize(Roles = $"{Roles.BloodBank},{Roles.Admin}")]
+    public async Task<IActionResult> Update(Guid id, [FromBody] CreateBloodBankDto dto)
+    {
+        var bank = await _db.BloodBanks.FindAsync(id);
+        if (bank is null) return NotFound("Blood bank not found.");
+
+        bank.Name = dto.Name;
+        bank.District = dto.District;
+        bank.ContactPhone = dto.ContactPhone;
+
+        await _db.SaveChangesAsync();
+        return Ok(bank);
+    }
+
+    [HttpDelete("{id:guid}")]
+    [Authorize(Roles = Roles.Admin)]
+    public async Task<IActionResult> Delete(Guid id)
+    {
+        var bank = await _db.BloodBanks.FindAsync(id);
+        if (bank is null) return NotFound("Blood bank not found.");
+
+        _db.BloodBanks.Remove(bank);
+        await _db.SaveChangesAsync();
+        return NoContent();
+    }
+
+    [HttpGet("find-donor")]
+    [Authorize(Roles = $"{Roles.BloodBank},{Roles.Admin}")]
+    public async Task<IActionResult> FindDonor([FromQuery] string query)
+    {
+        var user = await _db.Users
+            .Include(u => u.DonorProfile)
+            .FirstOrDefaultAsync(u => u.NicNumber == query || u.Email == query);
+
+        if (user is null || user.DonorProfile is null)
+            return NotFound("No registered donor profile found with this NIC or Email.");
+
+        return Ok(new
+        {
+            UserId = user.Id,
+            user.FullName,
+            user.Email,
+            user.NicNumber,
+            user.District,
+            user.PhoneNumber,
+            user.DonorProfile.BloodType,
+            user.DonorProfile.IsEligibleToDonate,
+            user.DonorProfile.DonorCardNumber,
+            user.DonorProfile.DonationsCompletedCount
+        });
+    }
 
     /// <summary>Records a completed donation and updates the donor's cooldown timer.</summary>
     [HttpPost("{bankId:guid}/record-donation")]
@@ -64,10 +118,30 @@ public class BloodBankController : ControllerBase
         };
         _db.DonationRecords.Add(record);
 
+        profile.DonationsCompletedCount += 1;
+        profile.TotalVolumeMl += volumeMl;
         profile.LastDonationDateUtc = DateTime.UtcNow;
         profile.IsEligibleToDonate = false; // resets on the 120-day job / manual recalculation
 
         await _db.SaveChangesAsync();
         return Ok(record);
+    }
+
+    [HttpDelete("donations/{id:guid}")]
+    [Authorize(Roles = $"{Roles.BloodBank},{Roles.Admin}")]
+    public async Task<IActionResult> DeleteDonationRecord(Guid id)
+    {
+        var record = await _db.DonationRecords.Include(r => r.DonorProfile).FirstOrDefaultAsync(r => r.Id == id);
+        if (record is null) return NotFound("Donation record not found.");
+
+        if (record.DonorProfile != null)
+        {
+            record.DonorProfile.DonationsCompletedCount = Math.Max(0, record.DonorProfile.DonationsCompletedCount - 1);
+            record.DonorProfile.TotalVolumeMl = Math.Max(0, record.DonorProfile.TotalVolumeMl - record.VolumeMl);
+        }
+
+        _db.DonationRecords.Remove(record);
+        await _db.SaveChangesAsync();
+        return NoContent();
     }
 }

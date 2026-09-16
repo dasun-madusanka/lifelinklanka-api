@@ -29,7 +29,12 @@ public class RegisterDtoValidator : AbstractValidator<RegisterDto>
 
         RuleFor(x => x.DateOfBirth)
             .LessThan(DateTime.UtcNow.AddYears(-18))
-            .WithMessage("Donor must be at least 18 years old to register.");
+            .WithMessage("User must be at least 18 years old to register.");
+
+        RuleFor(x => x.Role)
+            .NotEmpty()
+            .Must(r => r == "Donor" || r == "HospitalStaff" || r == "BloodBank")
+            .WithMessage("Role must be one of: Donor, HospitalStaff, BloodBank.");
     }
 }
 

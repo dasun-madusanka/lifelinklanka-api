@@ -6,23 +6,22 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using LifeLinkLanka.Application.DTOs.Donor;
+using LifeLinkLanka.API.Extensions;
 
 namespace LifeLinkLanka.API.Controllers;
 
 [ApiController]
 [Route("api/v1/donors")]
-[Authorize(Roles = Roles.Donor)]
+[Authorize]
 public class DonorController : ControllerBase
 {
     private readonly ApplicationDbContext _db;
     public DonorController(ApplicationDbContext db) => _db = db;
 
-    private Guid CurrentUserId => Guid.Parse(User.FindFirst("sub")!.Value);
+    private Guid CurrentUserId => User.GetUserId();
 
     /// <summary>
-    /// Creates or updates the logged-in donor's profile. This MUST be called after registration
-    /// for a donor to ever be matched to a blood request — BloodRequestController only queries
-    /// DonorProfiles, so a user with no profile is invisible to the matching system.
+    /// Creates or updates the logged-in donor's profile.
     /// </summary>
     [HttpPut("profile")]
     public async Task<IActionResult> UpsertProfile(UpsertDonorProfileDto dto)
@@ -40,7 +39,8 @@ public class DonorController : ControllerBase
                 BloodType = dto.BloodType,
                 WeightKg = dto.WeightKg,
                 ConsentToBeContacted = dto.ConsentToBeContacted,
-                MedicalNotes = dto.MedicalNotes
+                MedicalNotes = dto.MedicalNotes,
+                DonorCardNumber = $"NBTS-LK-{Random.Shared.Next(100000, 999999)}"
             };
             _db.DonorProfiles.Add(profile);
         }
@@ -60,10 +60,30 @@ public class DonorController : ControllerBase
     public async Task<IActionResult> GetMyProfile()
     {
         var profile = await _db.DonorProfiles
+            .Include(p => p.User)
             .Include(p => p.DonationHistory)
             .FirstOrDefaultAsync(p => p.UserId == CurrentUserId);
 
-        return profile is null ? NotFound("No donor profile yet — call PUT /profile first.") : Ok(profile);
+        if (profile is null)
+        {
+            var user = await _db.Users.FindAsync(CurrentUserId);
+            if (user is null) return NotFound("User not found.");
+
+            profile = new DonorProfile
+            {
+                UserId = CurrentUserId,
+                User = user,
+                BloodType = BloodType.OPositive,
+                WeightKg = 65,
+                IsEligibleToDonate = true,
+                ConsentToBeContacted = true,
+                DonorCardNumber = $"NBTS-LK-{Random.Shared.Next(100000, 999999)}"
+            };
+            _db.DonorProfiles.Add(profile);
+            await _db.SaveChangesAsync();
+        }
+
+        return Ok(profile);
     }
 
     /// <summary>

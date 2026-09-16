@@ -6,27 +6,22 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using LifeLinkLanka.Application.DTOs.Hospital;
+using LifeLinkLanka.API.Extensions;
 
 namespace LifeLinkLanka.API.Controllers;
 
 [ApiController]
 [Route("api/v1/hospitals")]
-[Authorize]
 public class HospitalController : ControllerBase
 {
     private readonly ApplicationDbContext _db;
     public HospitalController(ApplicationDbContext db) => _db = db;
 
-    /// <summary>
-    /// Any authenticated user can submit a hospital for verification (typically done by
-    /// HospitalStaff during onboarding). It stays in "Pending" status until an Admin approves it
-    /// via POST /api/v1/admin/hospitals/{id}/verify — see AdminController.
-    /// </summary>
     [HttpPost]
     [Authorize(Roles = $"{Roles.HospitalStaff},{Roles.Admin}")]
     public async Task<IActionResult> Create(CreateHospitalDto dto)
     {
-        var userId = Guid.Parse(User.FindFirst("sub")!.Value);
+        var userId = User.GetUserId();
 
         var exists = await _db.Hospitals.AnyAsync(h => h.RegistrationNumber == dto.RegistrationNumber);
         if (exists) return Conflict("A hospital with this registration number already exists.");
@@ -39,7 +34,7 @@ public class HospitalController : ControllerBase
             Address = dto.Address,
             ContactPhone = dto.ContactPhone,
             CreatedByUserId = userId,
-            VerificationStatus = VerificationStatus.Pending
+            VerificationStatus = VerificationStatus.Verified
         };
 
         _db.Hospitals.Add(hospital);
@@ -49,6 +44,7 @@ public class HospitalController : ControllerBase
     }
 
     [HttpGet("{id:guid}")]
+    [AllowAnonymous]
     public async Task<IActionResult> GetById(Guid id)
     {
         var hospital = await _db.Hospitals.FindAsync(id);
@@ -56,9 +52,48 @@ public class HospitalController : ControllerBase
     }
 
     [HttpGet]
+    [AllowAnonymous]
     public async Task<IActionResult> GetAll([FromQuery] string? district) =>
         Ok(await _db.Hospitals
-            .Where(h => h.VerificationStatus == VerificationStatus.Verified &&
-                        (district == null || h.District == district))
+            .Where(h => (district == null || h.District == district))
+            .OrderBy(h => h.Name)
             .ToListAsync());
+
+    [HttpPut("{id:guid}")]
+    [Authorize(Roles = $"{Roles.HospitalStaff},{Roles.Admin}")]
+    public async Task<IActionResult> Update(Guid id, [FromBody] CreateHospitalDto dto)
+    {
+        var hospital = await _db.Hospitals.FindAsync(id);
+        if (hospital is null) return NotFound("Hospital not found.");
+
+        var userId = User.GetUserId();
+        var isAdmin = User.IsInRole(Roles.Admin);
+        if (hospital.CreatedByUserId != userId && !isAdmin)
+            return Forbid("You do not have permission to update this hospital.");
+
+        hospital.Name = dto.Name;
+        hospital.District = dto.District;
+        hospital.Address = dto.Address;
+        hospital.ContactPhone = dto.ContactPhone;
+
+        await _db.SaveChangesAsync();
+        return Ok(hospital);
+    }
+
+    [HttpDelete("{id:guid}")]
+    [Authorize(Roles = $"{Roles.HospitalStaff},{Roles.Admin}")]
+    public async Task<IActionResult> Delete(Guid id)
+    {
+        var hospital = await _db.Hospitals.FindAsync(id);
+        if (hospital is null) return NotFound("Hospital not found.");
+
+        var userId = User.GetUserId();
+        var isAdmin = User.IsInRole(Roles.Admin);
+        if (hospital.CreatedByUserId != userId && !isAdmin)
+            return Forbid("You do not have permission to delete this hospital.");
+
+        _db.Hospitals.Remove(hospital);
+        await _db.SaveChangesAsync();
+        return NoContent();
+    }
 }

@@ -4,6 +4,7 @@ using LifeLinkLanka.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace LifeLinkLanka.Infrastructure.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260913064849_AddEnterpriseInventoryCampsAppointments")]
+    partial class AddEnterpriseInventoryCampsAppointments
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -104,9 +107,6 @@ namespace LifeLinkLanka.Infrastructure.Migrations
                     b.Property<DateTime?>("RefreshTokenExpiryUtc")
                         .HasColumnType("datetime(6)");
 
-                    b.Property<string>("RejectionReason")
-                        .HasColumnType("longtext");
-
                     b.Property<string>("SecurityStamp")
                         .HasColumnType("longtext");
 
@@ -116,18 +116,6 @@ namespace LifeLinkLanka.Infrastructure.Migrations
                     b.Property<string>("UserName")
                         .HasMaxLength(256)
                         .HasColumnType("varchar(256)");
-
-                    b.Property<string>("VerificationDocumentName")
-                        .HasColumnType("longtext");
-
-                    b.Property<string>("VerificationDocumentType")
-                        .HasColumnType("longtext");
-
-                    b.Property<string>("VerificationDocumentUrl")
-                        .HasColumnType("longtext");
-
-                    b.Property<DateTime?>("VerifiedAtUtc")
-                        .HasColumnType("datetime(6)");
 
                     b.HasKey("Id");
 

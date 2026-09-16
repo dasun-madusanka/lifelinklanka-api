@@ -16,5 +16,8 @@ public class BloodRequest : BaseEntity
     public string PatientContext { get; set; } = default!; // e.g. "Accident trauma, Colombo General"
     public DateTime NeededByUtc { get; set; }
 
+    public BloodComponentType ComponentNeeded { get; set; } = BloodComponentType.WholeBlood;
+    public string? ClinicalIndication { get; set; }
+
     public ICollection<DonorMatch> Matches { get; set; } = new List<DonorMatch>();
 }

@@ -15,5 +15,9 @@ public class DonorProfile : BaseEntity
     public string? MedicalNotes { get; set; }
     public bool ConsentToBeContacted { get; set; } = true;
 
+    public int DonationsCompletedCount { get; set; } = 0;
+    public double TotalVolumeMl { get; set; } = 0;
+    public string? DonorCardNumber { get; set; }
+
     public ICollection<DonationRecord> DonationHistory { get; set; } = new List<DonationRecord>();
 }

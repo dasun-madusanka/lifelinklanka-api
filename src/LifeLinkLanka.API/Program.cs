@@ -36,6 +36,7 @@ builder.Services.AddAuthentication(options =>
     })
     .AddJwtBearer(options =>
     {
+        options.MapInboundClaims = false;
         options.TokenValidationParameters = new TokenValidationParameters
         {
             ValidateIssuer = true,
@@ -69,7 +70,12 @@ builder.Services.AddAuthorization(options =>
         policy.RequireRole(Roles.HospitalStaff).RequireClaim("mfaEnabled", "True"));
 });
 
-builder.Services.AddControllers();
+builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+    {
+        options.JsonSerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter());
+        options.JsonSerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles;
+    });
 
 builder.Services.AddFluentValidationAutoValidation();
 builder.Services.AddValidatorsFromAssemblyContaining<RegisterDtoValidator>();
@@ -99,7 +105,12 @@ builder.Services.AddSwaggerGen(c =>
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy =>
-        policy.WithOrigins(builder.Configuration["Cors:AllowedOrigin"] ?? "http://localhost:3000")
+        policy.WithOrigins(
+            "http://localhost:4200",
+            "https://localhost:4200",
+            "http://localhost:3000",
+            "http://127.0.0.1:4200",
+            builder.Configuration["Cors:AllowedOrigin"] ?? "http://localhost:4200")
               .AllowAnyHeader().AllowAnyMethod().AllowCredentials());
 });
 
@@ -107,31 +118,9 @@ var app = builder.Build();
 
 using (var scope = app.Services.CreateScope())
 {
-    var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole<Guid>>>();
-    var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
     var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
     await db.Database.MigrateAsync();
-
-    foreach (var role in Roles.All)
-        if (!await roleManager.RoleExistsAsync(role))
-            await roleManager.CreateAsync(new IdentityRole<Guid>(role));
-
-    if (await userManager.FindByEmailAsync("admin@lifelinklanka.lk") is null)
-    {
-        var admin = new ApplicationUser
-        {
-            UserName = "admin@lifelinklanka.lk",
-            Email = "admin@lifelinklanka.lk",
-            FullName = "System Administrator",
-            NicNumber = "000000000V",
-            District = "Colombo",
-            DateOfBirth = new DateTime(1990, 1, 1),
-            EmailConfirmed = true,
-            IsActive = true
-        };
-        await userManager.CreateAsync(admin, "Admin@12345!");
-        await userManager.AddToRoleAsync(admin, Roles.Admin);
-    }
+    await LifeLinkLanka.Infrastructure.Identity.IdentitySeeder.SeedAllAsync(app.Services);
 }
 
 if (app.Environment.IsDevelopment())
@@ -142,6 +131,15 @@ if (app.Environment.IsDevelopment())
 
 app.UseMiddleware<ExceptionHandlingMiddleware>();
 app.UseHttpsRedirection();
+
+// Ensure wwwroot/uploads exists for verification documents
+var uploadsPath = Path.Combine(app.Environment.WebRootPath ?? Path.Combine(Directory.GetCurrentDirectory(), "wwwroot"), "uploads");
+if (!Directory.Exists(uploadsPath))
+{
+    Directory.CreateDirectory(uploadsPath);
+}
+app.UseStaticFiles();
+
 app.UseCors("AllowFrontend");
 app.UseAuthentication();
 app.UseAuthorization();

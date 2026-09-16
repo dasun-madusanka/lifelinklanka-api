@@ -22,6 +22,11 @@ public class ApplicationUser : IdentityUser<Guid>
 
     public VerificationStatus AccountStatus { get; set; } = VerificationStatus.Pending;
     public bool IsActive { get; set; } = true;
+    public string? VerificationDocumentUrl { get; set; }
+    public string? VerificationDocumentName { get; set; }
+    public string? VerificationDocumentType { get; set; }
+    public DateTime? VerifiedAtUtc { get; set; }
+    public string? RejectionReason { get; set; }
 
     public DonorProfile? DonorProfile { get; set; }
 }
