@@ -104,23 +104,100 @@ builder.Services.AddSwaggerGen(c =>
 
 builder.Services.AddCors(options =>
 {
+    var allowedOrigins = new List<string>
+    {
+        "http://localhost:4200",
+        "https://localhost:4200",
+        "http://localhost:3000",
+        "http://127.0.0.1:4200"
+    };
+
+    var customOrigin = builder.Configuration["Cors:AllowedOrigin"];
+    if (!string.IsNullOrWhiteSpace(customOrigin))
+    {
+        var split = customOrigin.Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries);
+        foreach (var s in split)
+        {
+            var trimmed = s.Trim();
+            if (!string.IsNullOrWhiteSpace(trimmed) && !allowedOrigins.Contains(trimmed))
+            {
+                allowedOrigins.Add(trimmed);
+            }
+        }
+    }
+
     options.AddPolicy("AllowFrontend", policy =>
-        policy.WithOrigins(
-            "http://localhost:4200",
-            "https://localhost:4200",
-            "http://localhost:3000",
-            "http://127.0.0.1:4200",
-            builder.Configuration["Cors:AllowedOrigin"] ?? "http://localhost:4200")
-              .AllowAnyHeader().AllowAnyMethod().AllowCredentials());
+        policy.WithOrigins(allowedOrigins.ToArray())
+              .AllowAnyHeader()
+              .AllowAnyMethod()
+              .AllowCredentials());
 });
 
 var app = builder.Build();
 
+// Database Migration & Seeding with Resilience and Render Cloud Diagnostics
 using (var scope = app.Services.CreateScope())
 {
-    var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-    await db.Database.MigrateAsync();
-    await LifeLinkLanka.Infrastructure.Identity.IdentitySeeder.SeedAllAsync(app.Services);
+    var config = scope.ServiceProvider.GetRequiredService<IConfiguration>();
+    var connStr = LifeLinkLanka.Infrastructure.DependencyInjection.GetMySqlConnectionString(config);
+    var isRender = !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("RENDER"));
+
+    const int maxAttempts = 5;
+
+    for (int attempt = 1; attempt <= maxAttempts; attempt++)
+    {
+        try
+        {
+            Log.Information("Connecting to MySQL and applying pending migrations (Attempt {Attempt}/{MaxAttempts})...", attempt, maxAttempts);
+            var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            await db.Database.MigrateAsync();
+            Log.Information("Database migrations applied successfully.");
+
+            Log.Information("Seeding default identity roles and system administrators...");
+            await LifeLinkLanka.Infrastructure.Identity.IdentitySeeder.SeedAllAsync(app.Services);
+            Log.Information("Identity seeding completed.");
+
+            break;
+        }
+        catch (Exception ex)
+        {
+            Log.Warning("Database connection attempt {Attempt}/{MaxAttempts} failed: {ErrorMessage}", attempt, maxAttempts, ex.Message);
+            if (attempt < maxAttempts)
+            {
+                Log.Information("Waiting 3 seconds before next connection attempt...");
+                await Task.Delay(3000);
+            }
+            else
+            {
+                Log.Error(ex, "FATAL: Could not establish connection to MySQL database after {MaxAttempts} attempts.", maxAttempts);
+                
+                if (isRender || connStr.Contains("localhost", StringComparison.OrdinalIgnoreCase) || connStr.Contains("YOUR_DB_PASSWORD"))
+                {
+                    Log.Fatal(@"
+====================================================================================
+RENDER CLOUD DEPLOYMENT CONFIGURATION REQUIRED:
+------------------------------------------------------------------------------------
+Your application is running in a cloud/container environment without a local MySQL server.
+You must configure your cloud MySQL database connection string in the Render Dashboard:
+
+1. Open Render Dashboard: https://dashboard.render.com
+2. Select your 'lifelinklanka-api' Web Service.
+3. Click 'Environment' in the left menu.
+4. Add the following Environment Variable:
+   Key:   ConnectionStrings__MySqlConnection
+   Value: Server=<YOUR_HOST>;Port=<PORT>;Database=<DB_NAME>;User=<USER>;Password=<PASSWORD>;SslMode=Preferred;
+
+(Alternatively set 'MYSQL_URL' or 'DATABASE_URL' if using a connection URL).
+====================================================================================");
+                }
+
+                if (app.Environment.IsProduction())
+                {
+                    throw;
+                }
+            }
+        }
+    }
 }
 
 if (app.Environment.IsDevelopment())
